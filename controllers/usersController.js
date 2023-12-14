@@ -1,75 +1,81 @@
 const User = require('../models/User')
 const Note = require('../models/Note')
-const asyncHandler = require('express-async-handler')
 const bcrypt = require('bcrypt')
 
-// @desc    Get all users
-// @route   GET /users
-// @access  Private
-const getAllUsers = asyncHandler(async (req, res) => {
+// @desc Get all users
+// @route GET /users
+// @access Private
+const getAllUsers = async (req, res) => {
+    // Get all users from MongoDB
     const users = await User.find().select('-password').lean()
-    if(!users?.length) {
-        return res.status(400).json({ message: 'Nie znaleziono użytkownika' })
-    }
-    res.json(users)
-})
 
-// @desc    Create new user
-// @route   POST /users
-// @access  Private
-const createNewUser = asyncHandler(async (req, res) => {
+    // If no users
+    if (!users?.length) {
+        return res.status(400).json({ message: 'No users found' })
+    }
+
+    res.json(users)
+}
+
+// @desc Create new user
+// @route POST /users
+// @access Private
+const createNewUser = async (req, res) => {
     const { username, password, roles } = req.body
 
-    // Potwierdź dane
-    if(!username || !password || !Array.isArray(roles) || !roles.length) {
-        return res.status(400).json({ message: 'Wymagane uzupełnienie wszystkich pól' })
+    // Confirm data
+    if (!username || !password) {
+        return res.status(400).json({ message: 'All fields are required' })
     }
 
-    // Sprawdzenie duplikatów
-    const duplicate = await User.findOne ({ username }).lean().exec()
+    // Check for duplicate username
+    const duplicate = await User.findOne({ username }).collation({ locale: 'en', strength: 2 }).lean().exec()
 
-    if(duplicate) {
-        return res.status(409).json({ message: 'Użytkownik o podanej nazwie już istnieje' })
+    if (duplicate) {
+        return res.status(409).json({ message: 'Duplicate username' })
     }
 
-    //Haszowanie hasła
-    const hashedPwd = await bcrypt.hash(password, 10) // 10 - salt rounds
+    // Hash password
+    const hashedPwd = await bcrypt.hash(password, 10) // salt rounds
 
-    const userObject = { username, "password": hashedPwd, roles }
+    const userObject = (!Array.isArray(roles) || !roles.length)
+        ? { username, "password": hashedPwd }
+        : { username, "password": hashedPwd, roles }
 
-    // Tworzenie nowego użytkownika
+    // Create and store new user
     const user = await User.create(userObject)
 
-    if (user) { // utworzono użytkownika
-        return res.status(201).json({ message: `Użytkownik ${username} został utworzony` })
+    if (user) { //created
+        res.status(201).json({ message: `New user ${username} created` })
     } else {
-        return res.status(400).json({ message: 'Nie udało się utworzyć użytkownika' })
+        res.status(400).json({ message: 'Invalid user data received' })
     }
-})
+}
 
-// @desc    Update a users
-// @route   PATCH /users
-// @access  Private
-const updateUser = asyncHandler(async (req, res) => {
+// @desc Update a user
+// @route PATCH /users
+// @access Private
+const updateUser = async (req, res) => {
     const { id, username, roles, active, password } = req.body
 
-    // Potwierdź dane
+    // Confirm data
     if (!id || !username || !Array.isArray(roles) || !roles.length || typeof active !== 'boolean') {
-        return res.status(400).json({ message: 'Wymagane uzupełnienie wszystkich pól' })
+        return res.status(400).json({ message: 'All fields except password are required' })
     }
 
+    // Does the user exist to update?
     const user = await User.findById(id).exec()
 
     if (!user) {
-        return res.status(400).json({ message: 'Nie znaleziono użytkownika' })
+        return res.status(400).json({ message: 'User not found' })
     }
 
-    // Sprawdzenie duplikatów
-    const duplicate = await User.findOne({ username }).lean().exec()
+    // Check for duplicate
+    const duplicate = await User.findOne({ username }).collation({ locale: 'en', strength: 2 }).lean().exec()
 
-    // Dozwolone aktualizacje oryginalnego użytkownika
+    // Allow updates to the original user
     if (duplicate && duplicate?._id.toString() !== id) {
-        return res.status(409).json({ message: 'Użytkownik o podanej nazwie już istnieje' })
+        return res.status(409).json({ message: 'Duplicate username' })
     }
 
     user.username = username
@@ -77,42 +83,46 @@ const updateUser = asyncHandler(async (req, res) => {
     user.active = active
 
     if (password) {
-        // Haszowanie hasła
-        user.password = await bcrypt.hash(password, 10) // 10 - salt rounds
+        // Hash password
+        user.password = await bcrypt.hash(password, 10) // salt rounds
     }
 
     const updatedUser = await user.save()
 
-    res.json({ message: `Użytkownik ${updatedUser.username} został zaktualizowany` })
-})
+    res.json({ message: `${updatedUser.username} updated` })
+}
 
-// @desc    Delete a user
-// @route   DELETE /users
-// @access  Private
-const deleteUser = asyncHandler(async (req, res) => {
+// @desc Delete a user
+// @route DELETE /users
+// @access Private
+const deleteUser = async (req, res) => {
     const { id } = req.body
 
+    // Confirm data
     if (!id) {
-        return res.status(400).json({ message: 'Nie podano ID użytkownika' })
+        return res.status(400).json({ message: 'Wymagane ID użytkownika' })
     }
 
+    // Does the user still have assigned notes?
     const note = await Note.findOne({ user: id }).lean().exec()
     if (note) {
-        return res.status(400).json({ message: 'Nie można usunąć użytkownika, który posiada przypisaną notkę' })
+        return res.status(400).json({ message: 'Użytkownik ma przypisane notki' +
+                '' })
     }
 
+    // Does the user exist to delete?
     const user = await User.findById(id).exec()
 
     if (!user) {
-        return res.status(400).json({ message: 'Nie znaleziono użytkownika' })
+        return res.status(400).json({ message: 'Użytkownik nie został znaleziony' })
     }
 
     const result = await user.deleteOne()
 
-    const reply = `Użytkownik ${result.username} o ID ${result._id} został usunięty`
+    const reply = `Użytkownik ${result.username} z ID ${result._id} usunięty`
 
     res.json(reply)
-})
+}
 
 module.exports = {
     getAllUsers,
