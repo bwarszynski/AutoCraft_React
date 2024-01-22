@@ -2,80 +2,80 @@ const User = require('../models/User')
 const Note = require('../models/Note')
 const bcrypt = require('bcrypt')
 
-// @desc Get all users
+// @desc Pobierz wszystkich użytkowników
 // @route GET /users
 // @access Private
 const getAllUsers = async (req, res) => {
-    // Get all users from MongoDB
+    // Pobierz wszystkich użytkowników z MongoDB
     const users = await User.find().select('-password').lean()
 
-    // If no users
+    // Jeśli nie ma użytkowników:
     if (!users?.length) {
-        return res.status(400).json({ message: 'No users found' })
+        return res.status(400).json({ message: 'Nie znaleziono użytkowników' })
     }
 
     res.json(users)
 }
 
-// @desc Create new user
+// @desc Stwórz nowego użytkownika
 // @route POST /users
 // @access Private
 const createNewUser = async (req, res) => {
     const { username, password, roles } = req.body
 
-    // Confirm data
+    // Weryfikacja i potwierdzenie danych
     if (!username || !password) {
-        return res.status(400).json({ message: 'All fields are required' })
+        return res.status(400).json({ message: 'Wszystkie pola są wymagane' })
     }
 
-    // Check for duplicate username
+    // Sprawdzenie zduplikowanych nazw użytkownika
     const duplicate = await User.findOne({ username }).collation({ locale: 'en', strength: 2 }).lean().exec()
 
     if (duplicate) {
-        return res.status(409).json({ message: 'Duplicate username' })
+        return res.status(409).json({ message: 'Zduplikowana nazwa użytkownika' })
     }
 
-    // Hash password
-    const hashedPwd = await bcrypt.hash(password, 10) // salt rounds
+    // Hashowanie hasła
+    const hashedPwd = await bcrypt.hash(password, 10)
 
     const userObject = (!Array.isArray(roles) || !roles.length)
         ? { username, "password": hashedPwd }
         : { username, "password": hashedPwd, roles }
 
-    // Create and store new user
+    // Stwórz i zapisz użytkownika
     const user = await User.create(userObject)
 
-    if (user) { //created
-        res.status(201).json({ message: `New user ${username} created` })
+    if (user) { //stworzony
+        res.status(201).json({ message: `Nowy użytkownik ${username} stworzony` })
     } else {
-        res.status(400).json({ message: 'Invalid user data received' })
+        res.status(400).json({ message: 'Otrzymano niewłaściwe dane' })
     }
 }
 
-// @desc Update a user
+// @desc Zaktualizuj użytkownika
 // @route PATCH /users
 // @access Private
 const updateUser = async (req, res) => {
     const { id, username, roles, active, password } = req.body
 
-    // Confirm data
+    // Potwierdzenie i weryfikacja danych
     if (!id || !username || !Array.isArray(roles) || !roles.length || typeof active !== 'boolean') {
-        return res.status(400).json({ message: 'All fields except password are required' })
+        return res.status(400).json({ message: 'Wymagane są wszystkie pola, poza hasłem' })
     }
 
-    // Does the user exist to update?
+    // Czy użytkownik do aktualizacji istnieje?
     const user = await User.findById(id).exec()
 
     if (!user) {
-        return res.status(400).json({ message: 'User not found' })
+        return res.status(400).json({ message: 'Nie znaleziono użytkownika' })
     }
 
-    // Check for duplicate
+    // Sprawdź zduplikowane nazwy użytkownika
     const duplicate = await User.findOne({ username }).collation({ locale: 'en', strength: 2 }).lean().exec()
 
-    // Allow updates to the original user
+    // Zezwól na zmiany w oryginalnym użytkowniku
     if (duplicate && duplicate?._id.toString() !== id) {
-        return res.status(409).json({ message: 'Duplicate username' })
+        return res.status(409).json({ message: 'Zduplikowana nazwa użytkownika' })
     }
 
     user.username = username
@@ -83,34 +83,34 @@ const updateUser = async (req, res) => {
     user.active = active
 
     if (password) {
-        // Hash password
-        user.password = await bcrypt.hash(password, 10) // salt rounds
+        // haszowanie hasła
+        user.password = await bcrypt.hash(password, 10)
     }
 
     const updatedUser = await user.save()
 
-    res.json({ message: `${updatedUser.username} updated` })
+    res.json({ message: `${updatedUser.username} zaktualizowany` })
 }
 
-// @desc Delete a user
+// @desc Usuń użytkownika
 // @route DELETE /users
 // @access Private
 const deleteUser = async (req, res) => {
     const { id } = req.body
 
-    // Confirm data
+    // Potwierdzenie danych
     if (!id) {
         return res.status(400).json({ message: 'Wymagane ID użytkownika' })
     }
 
-    // Does the user still have assigned notes?
+    // Czy użytkownik ma przypisane notki?
     const note = await Note.findOne({ user: id }).lean().exec()
     if (note) {
         return res.status(400).json({ message: 'Użytkownik ma przypisane notki' +
                 '' })
     }
 
-    // Does the user exist to delete?
+    // Czy użytkownik istnieje i można go usunąć
     const user = await User.findById(id).exec()
 
     if (!user) {

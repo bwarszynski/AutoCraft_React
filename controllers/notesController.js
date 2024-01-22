@@ -1,21 +1,19 @@
 const Note = require('../models/Note')
 const User = require('../models/User')
 
-// @desc Get all notes
+// @desc Pobierz wszystkie role
 // @route GET /notes
 // @access Private
 const getAllNotes = async (req, res) => {
-    // Get all notes from MongoDB
+    // Pobierz wszystkie notki z MongoDB
     const notes = await Note.find().lean()
 
-    // If no notes
+    // Jeśli nie ma notek
     if (!notes?.length) {
         return res.status(400).json({ message: 'Nie znaleziono notek' })
     }
 
-    // Add username to each note before sending the response
-    // See Promise.all with map() here: https://youtu.be/4lqJBBEpjRE
-    // You could also do this with a for...of loop
+    // Dodaj nazwę użytkownika do każdej notki przed wysłaniem odpowiedzi
     const notesWithUser = await Promise.all(notes.map(async (note) => {
         const user = await User.findById(note.user).lean().exec()
         return { ...note, username: user.username }
@@ -24,28 +22,28 @@ const getAllNotes = async (req, res) => {
     res.json(notesWithUser)
 }
 
-// @desc Create new note
+// @desc Stwórz nową notkę
 // @route POST /notes
 // @access Private
 const createNewNote = async (req, res) => {
     const { user, title, text } = req.body
 
-    // Confirm data
+    // Potwierdzenie danych
     if (!user || !title || !text) {
         return res.status(400).json({ message: 'Wszystkie pola wymagane' })
     }
 
-    // Check for duplicate title
+    // Sprawdź duplikaty
     const duplicate = await Note.findOne({ title }).collation({ locale: 'pl', strength: 2 }).lean().exec()
 
     if (duplicate) {
         return res.status(409).json({ message: 'Zduplikowany tytuł notki' })
     }
 
-    // Create and store the new user
+    // Stwórz i przechowaj nową notkę
     const note = await Note.create({ user, title, text })
 
-    if (note) { // Created
+    if (note) { // Stworzone
         return res.status(201).json({ message: 'Utworzono nową notkę' })
     } else {
         return res.status(400).json({ message: 'Otrzymano niepoprawne dane notki' })
@@ -53,28 +51,28 @@ const createNewNote = async (req, res) => {
 
 }
 
-// @desc Update a note
+// @desc Zaktualizuj notkę
 // @route PATCH /notes
 // @access Private
 const updateNote = async (req, res) => {
     const { id, user, title, text, completed } = req.body
 
-    // Confirm data
+    // Potwierdzenie danych
     if (!id || !user || !title || !text || typeof completed !== 'boolean') {
         return res.status(400).json({ message: 'Wszystkie pola wymagane' })
     }
 
-    // Confirm note exists to update
+    // Weryfikacja czy notka istnieje i można ją edytować
     const note = await Note.findById(id).exec()
 
     if (!note) {
         return res.status(400).json({ message: 'Notka nie została znaleziona' })
     }
 
-    // Check for duplicate title
+    // Sprawdź duplikaty tytułów
     const duplicate = await Note.findOne({ title }).collation({ locale: 'pl', strength: 2 }).lean().exec()
 
-    // Allow renaming of the original note
+    // Zezwól na zmianę nazwy notki jeśli nie jest to duplikat
     if (duplicate && duplicate?._id.toString() !== id) {
         return res.status(409).json({ message: 'Zduplikowany tytuł notki' })
     }
@@ -89,18 +87,18 @@ const updateNote = async (req, res) => {
     res.json(`'${updatedNote.title}' zaktualizowana`)
 }
 
-// @desc Delete a note
+// @desc Usuń notkę
 // @route DELETE /notes
 // @access Private
 const deleteNote = async (req, res) => {
     const { id } = req.body
 
-    // Confirm data
+    // Potwierdzenie danych
     if (!id) {
         return res.status(400).json({ message: 'Wymagane ID notki' })
     }
 
-    // Confirm note exists to delete
+    // Weryfikacja czy notka istnieje i można ją usunąć
     const note = await Note.findById(id).exec()
 
     if (!note) {

@@ -39,21 +39,21 @@ const login = async (req, res) => {
         { expiresIn: '7d' }
     )
 
-    // Create secure cookie with refresh token
+    // Stwórz zabezpieczone ciasteczko cookie z odświeżanym tokenem
     res.cookie('jwt', refreshToken, {
-        httpOnly: true, //accessible only by web server
+        httpOnly: true, //dostępny tylko dla serwera
         secure: true, //https
         sameSite: 'None', //cross-site cookie
-        maxAge: 7 * 24 * 60 * 60 * 1000 //cookie expiry: set to match rT
+        maxAge: 7 * 24 * 60 * 60 * 1000 //cookie wygasa
     })
 
-    // Send accessToken containing username and roles
+    // wyślij accessToken zawierający nazwę użytkownika i role
     res.json({ accessToken })
 }
 
-// @desc Refresh
+// @desc Odśwież
 // @route GET /auth/refresh
-// @access Public - because access token has expired
+// @access Public - access token wygasł
 const refresh = (req, res) => {
     const cookies = req.cookies
 
@@ -87,12 +87,12 @@ const refresh = (req, res) => {
     )
 }
 
-// @desc Logout
+// @desc Wyloguj
 // @route POST /auth/logout
-// @access Public - just to clear cookie if exists
+// @access Public - żeby wyczyścić pozostałe cookies
 const logout = (req, res) => {
     const cookies = req.cookies
-    if (!cookies?.jwt) return res.sendStatus(204) //No content
+    if (!cookies?.jwt) return res.sendStatus(204)
     res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true })
     res.json({ message: 'Ciasteczka wyczyszczone' })
 }
